@@ -107,7 +107,7 @@ theorem HasCondSum.of_const_mul (f : ℕ → ℝ) (C : ℝ) (hf : HasCondSum f) 
     apply funext
     intro x
     symm
-    exact Finset.mul_sum
+    exact mul_sum (range x) (fun i => f i) C
   rw [hk]
   apply Filter.Tendsto.const_mul
   exact ha
@@ -234,3 +234,38 @@ theorem nth_term_test [NormedAddCommGroup α] [CompleteSpace α] {f : ℕ → α
   rw [dist_eq_norm]
   simp
   exact hN
+
+theorem condconv_unique [AddCommMonoid α] [UniformSpace α] [T2Space α] {f : ℕ → α} (hf : CondConvergesTo f a) (hg : CondConvergesTo f b) : a = b :=
+   tendsto_nhds_unique hf hg
+
+theorem tendsto_shift [NormedAddCommGroup α] (f : ℕ → α) (x : α) (k : ℕ) : Tendsto f atTop (𝓝 x) ↔ Tendsto (fun i => f (i + k)) atTop (𝓝 x) := by
+  constructor
+  · intro hf
+    apply NormedAddCommGroup.tendsto_atTop.2
+    intro ε
+    intro hε
+    have hg := NormedAddCommGroup.tendsto_atTop.1 hf ε hε
+    have ⟨N, hN⟩ := hg
+    constructor
+    swap
+    exact N
+    intro n
+    intro hn
+    exact hN (n + k) (_root_.le_add_right hn)
+  · intro hf
+    apply NormedAddCommGroup.tendsto_atTop.2
+    intro ε
+    intro hε
+    have hg := NormedAddCommGroup.tendsto_atTop.1 hf ε hε
+    have ⟨N, hN⟩ := hg
+    constructor
+    swap
+    exact N + k
+    intro n
+    intro hn
+    have kek := hN (n - k) (le_sub_of_add_le hn)
+    have hk : n = (n - k + k) := by
+      refine (Nat.sub_add_cancel ?_).symm
+      exact le_of_add_le_right hn
+    rw [hk]
+    exact kek

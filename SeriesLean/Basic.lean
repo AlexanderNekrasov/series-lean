@@ -38,7 +38,7 @@ theorem HasCondSum.of_summable [AddCommMonoid α] [UniformSpace α] (f : ℕ →
   rw [CondConvergesTo]
   exact HasSum.tendsto_sum_nat  hf.hasSum
 
-theorem Summable.of_pos_of_conv (f : ℕ → ℝ) (hf : ∀ n, 0 ≤ f n) (hs : HasCondSum f)
+theorem Summable.of_pos_of_conv {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : HasCondSum f)
     : Summable f := by
   apply HasSum.summable
   rw [HasSum]
@@ -236,36 +236,194 @@ theorem nth_term_test [NormedAddCommGroup α] [CompleteSpace α] {f : ℕ → α
   exact hN
 
 theorem condconv_unique [AddCommMonoid α] [UniformSpace α] [T2Space α] {f : ℕ → α} (hf : CondConvergesTo f a) (hg : CondConvergesTo f b) : a = b :=
-   tendsto_nhds_unique hf hg
+  tendsto_nhds_unique hf hg
 
-theorem tendsto_shift [NormedAddCommGroup α] (f : ℕ → α) (x : α) (k : ℕ) : Tendsto f atTop (𝓝 x) ↔ Tendsto (fun i => f (i + k)) atTop (𝓝 x) := by
+theorem second_comparison_test {a : ℕ → ℝ} {b : ℕ → ℝ} (ha : ∀ n, 0 < a n) (hb : ∀ n, 0 < b n) (hab : ∃ m, 0 < m ∧ ∃ M, 0 < M ∧ ∀ n, m ≤ a n / b n ∧ a n / b n ≤ M) :
+    HasCondSum a ↔ HasCondSum b := by
+  have ⟨m, h1⟩ := hab
+  have hm := h1.1
+  have ⟨M, h2⟩ := h1.2
+  have hM := h2.1
+  have hmM := h2.2
   constructor
-  · intro hf
-    apply NormedAddCommGroup.tendsto_atTop.2
-    intro ε
-    intro hε
-    have hg := NormedAddCommGroup.tendsto_atTop.1 hf ε hε
-    have ⟨N, hN⟩ := hg
-    constructor
-    swap
-    exact N
+  · intro hca
+    have hba : HasCondSum (fun i => m * b i) := by
+      apply cconv_of_nonneg_of_le
+      · intro n
+        refine (mul_nonneg_iff_of_pos_left hm).mpr ?hf.a
+        exact LT.lt.le (hb n)
+      swap
+      exact hca
+      · intro n
+        have hk3 := (hmM n).1
+        exact (_root_.le_div_iff (hb n)).mp hk3
+    have hk := HasCondSum.of_const_mul (fun i => m * b i) (1 / m) hba
+    simp at hk
+    have hk2 : (fun i => m⁻¹ * (m * b i)) = b := by
+      apply funext
+      intro x
+      rw [← mul_assoc]
+      refine (mul_eq_right₀ ?h.hb).mpr ?h.a
+      exact _root_.ne_of_gt (hb x)
+      refine (inv_mul_eq_one₀ ?h.a.ha).mpr rfl
+      exact _root_.ne_of_gt hm
+    rw [← hk2]
+    exact hk
+  · intro hcb
+    have hba : HasCondSum (fun i => M⁻¹ * a i) := by
+      apply cconv_of_nonneg_of_le
+      · intro n
+        refine (mul_nonneg_iff_of_pos_right (ha n)).mpr ?foo
+        refine inv_nonneg.mpr ?foo.a
+        exact LT.lt.le hM
+      swap
+      exact hcb
+      intro n
+      have hk3 := (hmM n).2
+      refine (inv_mul_le_iff' hM).mpr ?hfg.a
+      exact (_root_.div_le_iff' (hb n)).mp hk3
+    have hk := HasCondSum.of_const_mul (fun i => M⁻¹ * a i) M hba
+    have hk2 : (fun i => M * (fun i => M⁻¹ * a i) i) = a := by
+      apply funext
+      intro x
+      simp
+      rw [← mul_assoc]
+      refine mul_left_eq_self₀.mpr ?boo
+      left
+      refine mul_inv_cancel ?foo.h.h
+      exact _root_.ne_of_gt hM
+    rw [← hk2]
+    exact hk
+
+theorem equally_convergent_of_limit {a : ℕ → ℝ} {b : ℕ → ℝ} {c : ℝ} (ha : ∀ n, 0 < a n) (hb : ∀ n, 0 < b n) (hc : 0 < c) (hab : Tendsto (fun i => a i / (b i)) atTop (𝓝 c)) :
+    HasCondSum a ↔ HasCondSum b := by
+  apply second_comparison_test
+  exact ha
+  exact hb
+  have mm_0 := Metric.tendsto_atTop.1 hab (c / 2) (half_pos hc)
+  let ⟨n_0, hn_0⟩ := mm_0
+  have hkek : (image (fun i => a i / b i) (range (n_0 + 1))).Nonempty := by
+    apply Finset.image_nonempty.2
+    apply Finset.nonempty_range_iff.2
+    exact succ_ne_zero n_0
+  let m_1 := Finset.min' (Finset.image (fun i => (a i) / (b i)) (Finset.range (n_0 + 1))) hkek
+  let m := min (c / 2) m_1
+  let M_1 := Finset.max' (Finset.image (fun i => (a i) / (b i)) (Finset.range (n_0 + 1))) hkek
+  let M := max (3 * c / 2) M_1
+  constructor
+  swap
+  exact m
+  constructor
+  · apply lt_min
+    exact half_pos hc
+    have kek : m_1 = Finset.min' (Finset.image (fun i => (a i) / (b i)) (Finset.range (n_0 + 1))) hkek := by
+      exact rfl
+    rw [kek]
+    apply (Finset.lt_min'_iff (Finset.image (fun i => (a i) / (b i)) (Finset.range (n_0 + 1))) hkek).2
+    intro y
+    intro hy
+    have hy2 := Finset.mem_image.1 hy
+    have ⟨q, hq⟩ := hy2
+    rw [← hq.2]
+    exact div_pos (ha q) (hb q)
+  constructor
+  swap
+  exact M
+  constructor
+  · have kek : M = max (3 * c / 2) M_1 := by exact rfl
+    rw [kek]
+    apply lt_max_of_lt_left
+    apply half_pos
+    refine Real.mul_pos ?hab.h.right.h.left.h.h.a hc
+    exact three_pos
+  intro n
+  cases (Classical.em (n ≤ n_0)) with
+  | inl hp =>
+      constructor
+      have hkek1 : m = min (c / 2) m_1 := rfl
+      rw [hkek1]
+      apply min_le_of_right_le
+      have hkek2 : m_1 = Finset.min' (Finset.image (fun i => a i / b i) (Finset.range (n_0 + 1))) hkek := rfl
+      rw [hkek2]
+      apply Finset.min'_le
+      apply Finset.mem_image.2
+      constructor
+      swap
+      exact n
+      constructor
+      exact mem_range_succ_iff.mpr hp
+      rfl
+      apply le_max_of_le_right
+      have hkek3 : M_1 = Finset.max' (Finset.image (fun i => (a i) / (b i)) (Finset.range (n_0 + 1))) hkek := rfl
+      rw [hkek3]
+      apply Finset.le_max'
+      apply Finset.mem_image.2
+      constructor
+      swap
+      exact n
+      constructor
+      exact mem_range_succ_iff.mpr hp
+      rfl
+  | inr hq =>
+      have hk := hn_0 n (Nat.le_of_not_ge hq)
+      rw [Real.dist_eq] at hk
+      constructor
+      have hl : c / 2 < a n / b n := by
+        have hkk := sub_lt_of_abs_sub_lt_left hk
+        rw [sub_self_div_two] at hkk
+        exact hkk
+      have hg : m ≤ c / 2 := by exact min_le_left (c / 2) m_1
+      exact LT.lt.le (LE.le.trans_lt hg hl)
+      have hl : a n / b n < 3 * c / 2 := by
+        have hkk := sub_lt_of_abs_sub_lt_right hk
+        have hll := add_lt_add_of_le_of_lt (Eq.le (refl (c / 2))) hkk
+        simp at hll
+        have hg : c / 2 + c = 3 * c / 2 := by
+          refine EuclideanDomain.eq_div_of_mul_eq_right ?haa ?h
+          exact two_ne_zero
+          rw [mul_add]
+          ring
+        rw [← hg]
+        exact hll
+      have hg : 3 * c / 2 ≤ M := by exact le_max_left (3 * c / 2) M_1
+      apply LT.lt.le (LT.lt.trans_le hl hg)
+
+theorem CondConvergesTo.shift [AddCommGroup α] [UniformSpace α] [ContinuousAdd α] {f: ℕ → α} {c: α} (k: ℕ) : CondConvergesTo f c ↔ CondConvergesTo (fun i => f (i + k)) (c - ∑ i in range k, f i) := by
+  have kek  : (fun s => (∑ i in range (s + k), f i) + (-∑ i in range k, f i)) = (fun s => ∑ i in range s, f (i + k)) := by
+    apply funext
     intro n
-    intro hn
-    exact hN (n + k) (_root_.le_add_right hn)
-  · intro hf
-    apply NormedAddCommGroup.tendsto_atTop.2
-    intro ε
-    intro hε
-    have hg := NormedAddCommGroup.tendsto_atTop.1 hf ε hε
-    have ⟨N, hN⟩ := hg
-    constructor
-    swap
-    exact N + k
-    intro n
-    intro hn
-    have kek := hN (n - k) (le_sub_of_add_le hn)
-    have hk : n = (n - k + k) := by
-      refine (Nat.sub_add_cancel ?_).symm
-      exact le_of_add_le_right hn
-    rw [hk]
-    exact kek
+    refine add_neg_eq_iff_eq_add.mpr ?h.a
+    induction n with
+    | zero => simp
+    | succ n ih =>
+        rw [Nat.succ_add, succ_eq_add_one, succ_eq_add_one, Finset.sum_range_succ, Finset.sum_range_succ]
+        rw [ih]
+        rw [add_assoc, add_assoc]
+        rw [add_comm (∑ i in range k, f i)]
+  rw [CondConvergesTo, CondConvergesTo]
+  constructor
+  intro hf
+  have hg := (@Filter.tendsto_add_atTop_iff_nat _ (fun s => ∑ i in range s, f i) (𝓝 c) k).2 hf
+  rw [← kek, sub_eq_add_neg]
+  apply Filter.Tendsto.add_const
+  exact hg
+  intro hf
+  rw [← kek] at hf
+  have hq := Filter.Tendsto.add_const (∑ i in range k, f i) hf
+  simp at hq
+  exact (@Filter.tendsto_add_atTop_iff_nat _ (fun s => ∑ i in range s, f i) (𝓝 c) k).1 hq
+
+theorem HasCondSum.shift [AddCommGroup α] [UniformSpace α] [ContinuousAdd α] {f : ℕ → α} (k : ℕ) : HasCondSum f ↔ HasCondSum (fun i => f (i + k)) := by
+  rw [HasCondSum, HasCondSum]
+  constructor
+  intro hf
+  have ⟨q, hq⟩ := hf
+  constructor
+  exact (CondConvergesTo.shift k).1 hq
+  intro hf
+  have ⟨q, hq⟩ := hf
+  constructor
+  have kek : q = q + ∑ i in range k, f i - ∑ i in range k, f i := by
+    simp
+  rw [kek] at hq
+  exact (CondConvergesTo.shift k).2 hq

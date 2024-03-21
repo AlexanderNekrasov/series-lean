@@ -147,7 +147,7 @@ theorem lemma9 : Tendsto (fun (n : ℕ) => ((1 - 2/((n+1)^3+4/3))^((n+1)^3) : �
   exact hh
 
 theorem lemma10 : Tendsto (fun (n : ℕ) => ((1 - 2/(n^3+4/3))^(n^3) : ℝ)) atTop (𝓝 (Real.exp (-2))) := by
-  apply (tendsto_shift (fun (n : ℕ) => ((1 - 2/(n^3+4/3))^(n^3) : ℝ)) (Real.exp (-2)) 1).2
+  apply (@Filter.tendsto_add_atTop_iff_nat _ (fun (n : ℕ) => ((1 - 2/(n^3+4/3))^(n^3) : ℝ)) _ 1).1
   have hk : (fun i => (1 - 2 / (@Nat.cast ℝ Real.natCast (i + 1) ^ 3 + 4 / 3)) ^ (i + 1) ^ 3) = (fun (n : ℕ) => ((1 - 2/((n+1)^3+4/3))^((n+1)^3) : ℝ)) := by
     apply funext
     intro n
@@ -189,5 +189,76 @@ theorem example1 : ¬ HasCondSum (fun n => ((((3 * n ^ 3 - 2) / (3 * n ^ 3 + 4))
   have ht := tendsto_nhds_unique hg lemma11
   have ht2 := LT.lt.ne (exp_pos (-2))
   exact ht2 ht
+
+end
+
+noncomputable section
+
+theorem first_wonderful_limit : Tendsto (fun x => (sin x) / x) (𝓝[≠] 0) (𝓝 1) := by
+  have hg := hasDerivAt_iff_tendsto_slope_zero.1 (Real.hasDerivAt_sin 0)
+  rw [Real.cos_zero] at hg
+  have kek : (fun x => sin x / x) = (fun t => t⁻¹ • (sin (0 + t) - sin 0)) := by
+    apply funext
+    intro x
+    rw [Real.sin_zero, zero_add, sub_zero, @IsROrC.real_smul_eq_coe_mul ℝ, IsROrC.ofReal_real_eq_id, id_eq]
+    ring
+  rw [kek]
+  exact hg
+
+
+theorem example2 : ¬ HasCondSum (fun n => sin (1 / n)) := by
+  intro hf
+  have hf2 := (HasCondSum.shift 1).1 hf
+  have kek : (fun i => sin (1 / @Nat.cast ℝ Real.natCast (i + 1))) = (fun i => sin (1 / (@Nat.cast ℝ Real.natCast i + 1))) := by
+    apply funext
+    intro x
+    apply congrArg
+    refine Mathlib.Tactic.LinearCombination.c_div_pf ?h.h.p 1
+    exact cast_succ x
+  rw [kek] at hf2
+  have ha : ∀ n : ℕ, 0 < sin (1 / (n + 1)) := by
+    intro n
+    apply Real.sin_pos_of_pos_of_le_one
+    exact one_div_pos_of_nat
+    have kek : 0 < (@Nat.cast ℝ Real.natCast n + 1) := by
+      exact cast_add_one_pos n
+    apply (div_le_one kek).2
+    refine sub_le_iff_le_add.mp ?hx.a
+    rw [sub_self]
+    exact cast_nonneg n
+  have hb : ∀ n : ℕ, 0 < (1 : ℝ) / (n + 1) := by
+    exact fun n => one_div_pos_of_nat
+  have hc : Tendsto (fun i : ℕ => sin (1 / (i + 1)) / ((1 : ℝ) / (i + 1))) atTop (𝓝 1) := by
+    have hd : Tendsto (fun i => 1 / (@Nat.cast ℝ Real.natCast i + 1)) atTop (𝓝[≠] 0) := by
+      apply tendsto_nhdsWithin_iff.2
+      constructor
+      exact tendsto_one_div_add_atTop_nhds_0_nat
+      apply Filter.eventually_atTop.2
+      constructor
+      swap
+      exact 0
+      intro b
+      intro _
+      apply (Set.mem_compl_iff {0} (1 / (@Nat.cast ℝ natCast b + 1))).2
+      have gg : (1 / (@Nat.cast ℝ natCast b + 1)) ≠ 0 := by
+        exact LT.lt.ne' (hb b)
+      assumption
+    exact Tendsto.comp first_wonderful_limit hd
+  have hd : (0 : ℝ) < 1 := by exact Real.zero_lt_one
+  have hf3 := (@equally_convergent_of_limit (fun i => sin (1 / (i + 1))) (fun i => (1 : ℝ) / (i + 1)) 1 ha hb hd hc).1 hf2
+  have kek : (fun i => 1 / (@Nat.cast ℝ Real.natCast i + 1)) = fun i => 1 / @Nat.cast ℝ Real.natCast (i + 1) := by
+    apply funext
+    intro n
+    refine Mathlib.Tactic.LinearCombination.c_div_pf ?h.p 1
+    symm
+    exact cast_succ n
+  rw [kek] at hf3
+  have hf4 := (@HasCondSum.shift ℝ _ _ _ (fun i => 1 / @Nat.cast ℝ Real.natCast i) 1).2 hf3
+  have kek2 : ∀ (n : ℕ), 0 ≤ 1 / @Nat.cast ℝ Real.natCast n := by
+    intro n
+    refine one_div_nonneg.mpr ?inr.a
+    exact cast_nonneg n
+  have hf5 := Summable.of_pos_of_conv kek2 hf4
+  exact Real.not_summable_one_div_nat_cast hf5
 
 end

@@ -1,6 +1,6 @@
 import Mathlib
 
-set_option maxHeartbeats 200000
+set_option maxHeartbeats 1000000
 
 
 open Classical BigOperators Topology Filter Nat Finset Metric Real ENNReal NNReal
@@ -12,6 +12,7 @@ def HasCondSum [AddCommMonoid α] [UniformSpace α] (f : ℕ → α) : Prop :=
   ∃ a, CondConvergesTo f a
 
 noncomputable def get_sum [AddCommMonoid α] [UniformSpace α] {f : ℕ → α} (hs : HasCondSum f) : α := Classical.choose hs
+theorem get_sum_spec [AddCommMonoid α] [UniformSpace α] {f : ℕ → α} (hs : HasCondSum f) : CondConvergesTo f (get_sum hs) := Classical.choose_spec hs
 
 theorem sum_of_nonneg_is_nonneg {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : HasCondSum f) : 0 ≤ get_sum hs := by
   lift f to ℕ → ℝ≥0 using fun i => hf i
@@ -32,7 +33,7 @@ theorem sum_of_nonneg_is_nonneg {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : 
 
 def AbsolutelyConverges [Norm β] (f : ℕ → β) : Prop := HasCondSum (fun i => ‖f i‖)
 
-theorem HasCondSum.of_summable [AddCommMonoid α] [UniformSpace α] (f : ℕ → α) (hf : Summable f) : HasCondSum f := by
+theorem HasCondSum.of_summable [AddCommMonoid α] [UniformSpace α] {f : ℕ → α} (hf : Summable f) : HasCondSum f := by
   rw [HasCondSum]
   constructor
   rw [CondConvergesTo]
@@ -77,13 +78,29 @@ theorem Summable.of_pos_of_conv {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : 
   rw [ht] at hq
   exact hq
 
-theorem Summable.of_abs_conv [SeminormedAddCommGroup β] [CompleteSpace β] (f : ℕ → β) (hf: AbsolutelyConverges f) : Summable f := by
+theorem Summable.of_abs_conv [SeminormedAddCommGroup β] [CompleteSpace β] {f : ℕ → β} (hf: AbsolutelyConverges f) : Summable f := by
   apply Summable.of_norm
   rw [AbsolutelyConverges] at hf
   apply Summable.of_pos_of_conv
   · intro n
     exact norm_nonneg (f n)
   exact hf
+
+theorem tsum_eq_get_sum' [SeminormedAddCommGroup β] [CompleteSpace β] [T2Space β] {f : ℕ → β} (hf : Summable f) : tsum f = get_sum (HasCondSum.of_summable hf) := by
+  have hc : HasSum f (tsum f) := by
+    exact Summable.hasSum hf
+  rw [HasSum] at hc
+  have hd : CondConvergesTo f (get_sum (HasCondSum.of_summable hf)) := by
+    exact get_sum_spec (HasCondSum.of_summable hf)
+  rw [CondConvergesTo] at hd
+  have hd' := Tendsto.comp hc tendsto_finset_range
+  have he : (fun s => ∑ b in s, f b) ∘ range = (fun s => ∑ i in range s, f i) := by
+    exact rfl
+  rw [he] at hd'
+  exact tendsto_nhds_unique hd' hd
+
+theorem tsum_eq_get_sum [SeminormedAddCommGroup β] [CompleteSpace β] [T2Space β] {f : ℕ → β} (hf : HasCondSum f) (hf2 : AbsolutelyConverges f) : tsum f = get_sum hf := by
+  exact tsum_eq_get_sum' (Summable.of_abs_conv hf2)
 
 theorem AbsolutelyConverges.of_nonneg (f : ℕ → ℝ) (hfpos : ∀ n, 0 ≤ f n)
     (hfsum : HasCondSum f) :
@@ -427,3 +444,362 @@ theorem HasCondSum.shift [AddCommGroup α] [UniformSpace α] [ContinuousAdd α] 
     simp
   rw [kek] at hq
   exact (CondConvergesTo.shift k).2 hq
+
+theorem third_comparison_test_conv' {a : ℕ → ℝ} {b : ℕ → ℝ} (ha : ∀ n, 0 < a n) (hb : ∀ n, 0 < b n) (hab : ∀ n, (a (n + 1)) / (a n) ≤ (b (n + 1)) / (b n))
+    : HasCondSum b → HasCondSum a := by
+  intro bconv
+  have h : ∀ n, (a n) / (a 0) ≤ (b n) / (b 0) := by
+    intro n
+    induction n with
+    | zero =>
+      rw [Nat.zero_eq]
+      rw [div_eq_mul_inv, div_eq_mul_inv, mul_inv_cancel, mul_inv_cancel]
+      exact _root_.ne_of_gt (hb 0)
+      exact _root_.ne_of_gt (ha 0)
+    | succ n ih =>
+      have ht1 : 0 ≤ a (n + 1) / a n := by
+        apply div_nonneg_iff.2
+        left
+        use (LT.lt.le $ ha (n + 1)), (LT.lt.le $ ha n)
+      have ht2 : 0 ≤ b n / b 0 := by
+        apply div_nonneg_iff.2
+        left
+        use (LT.lt.le $ hb n), (LT.lt.le $ hb 0)
+      have kek := mul_le_mul_of_le_of_le (hab n) ih ht1 ht2
+      rw [succ_eq_add_one]
+      rw [mul_comm_div, mul_comm_div, div_right_comm, div_right_comm (b n), div_eq_mul_inv (a n), div_eq_mul_inv (b n), mul_inv_cancel, mul_inv_cancel, mul_div_assoc', mul_one, mul_div_assoc', mul_one] at kek
+      assumption
+      exact _root_.ne_of_gt (hb n)
+      exact _root_.ne_of_gt (ha n)
+  have h' : ∀ n, a n ≤ (a 0) / (b 0) * b n := by
+    intro n
+    rw [div_mul_comm]
+    exact (_root_.div_le_iff (ha 0)).mp (h n)
+  apply cconv_of_nonneg_of_le
+  exact fun n => LT.lt.le (ha n)
+  exact h'
+  exact HasCondSum.of_const_mul (fun i => b i) (a 0 / b 0) bconv
+
+theorem third_comparison_test_conv {a : ℕ → ℝ} {b : ℕ → ℝ} (ha : ∀ n, 0 < a n) (hb : ∀ n, 0 < b n) (hab : ∃ N : ℕ, ∀ n, N ≤ n → (a (n + 1)) / (a n) ≤ (b (n + 1)) / (b n))
+    : HasCondSum b → HasCondSum a := by
+  intro bconv
+  let ⟨N, hab'⟩ := hab
+  have bconv' : HasCondSum (fun n => b (n + N)):= (HasCondSum.shift N).1 bconv
+  apply (HasCondSum.shift N).2
+  have ha' : ∀ n, 0 < a (n + N) := by
+    intro n
+    simp_all only
+  have hb' : ∀ n, 0 < b (n + N) := by
+    intro n
+    simp_all only
+  have hab'' : ∀ (n : ℕ), a (n + 1 + N) / a (n + N) ≤ b (n + 1 + N) / b (n + N) := by
+    intro n
+    have hk : n + 1 + N = n + N + 1 := by
+      ring
+    rw [hk]
+    simp_all only [forall_const, le_add_iff_nonneg_left, _root_.zero_le]
+  exact third_comparison_test_conv' ha' hb' hab'' bconv'
+
+theorem third_comparison_test_not_conv {a : ℕ → ℝ} {b : ℕ → ℝ} (ha : ∀ n, 0 < a n) (hb : ∀ n, 0 < b n) (hab : ∃ N : ℕ, ∀ n, N ≤ n → (a (n + 1)) / (a n) ≤ (b (n + 1)) / (b n))
+    : ¬ HasCondSum a → ¬ HasCondSum b := by
+  intro nconva
+  intro bconv
+  exact nconva $ third_comparison_test_conv ha hb hab bconv
+
+theorem HasCondSum.of_sum_range_le {f : ℕ → ℝ} {c : ℝ} (hf : ∀ (n : ℕ), 0 ≤ f n) (h : ∀ (n : ℕ), (Finset.sum (Finset.range n) fun i => f i) ≤ c) : HasCondSum f := by
+  apply HasCondSum.of_summable
+  exact summable_of_sum_range_le hf h
+
+theorem sum_le_get_sum {f : ℕ → ℝ} (hf1 : ∀ n, 0 ≤ f n) (hf2 : HasCondSum f) (n : ℕ)
+    : ∑ i in range n, f i ≤ get_sum hf2 := by
+  rw [← tsum_eq_get_sum]
+  apply sum_le_tsum
+  exact fun i _ => hf1 i
+  exact Summable.of_nonneg hf1 hf2
+  exact AbsolutelyConverges.of_nonneg f hf1 hf2
+
+theorem cauchy_condensation_test {a : ℕ → ℝ} (ha1 : ∀ n, 0 ≤ a n) (ha2 : Antitone a) :
+    HasCondSum a ↔ HasCondSum (fun n => 2 ^ n * a (2 ^ n)) := by
+  constructor
+  · intro conva
+    apply HasCondSum.of_sum_range_le
+    · intro n
+      simp_all only [gt_iff_lt, zero_lt_two, pow_pos, mul_nonneg_iff_of_pos_left]
+    swap
+    exact a 1 + 2 * get_sum conva
+    intro n
+    have hk : ∀ n, (∑ i in range n, 2 ^ i * a (2 ^ (i + 1))) ≤ ∑ i in range (2 ^ n + 1), a i := by
+      intro n
+      induction n with
+      | zero =>
+        rw [zero_eq, sum_range_zero, Nat.pow_zero]
+        apply sum_nonneg
+        exact fun i _ => ha1 i
+      | succ n ih =>
+        have ht : (k : ℕ) → (k ≤ 2 ^ n) →  (∑ i in range n, 2 ^ i * a (2 ^ (i + 1))) + k * a (2 ^ (n + 1)) ≤ ∑ i in range (2 ^ n + 1 + k), a i := by
+          intro k
+          induction k with
+          | zero =>
+            intro _
+            rw [zero_eq, Nat.cast_zero, zero_mul, add_zero, add_zero]
+            assumption
+          | succ k ik =>
+            rw [Nat.cast_succ, add_mul, one_mul, ← add_assoc, add_succ, add_succ, sum_range_succ, add_zero, succ_eq_add_one, succ_eq_add_one]
+
+            intro hk
+            have hk' : k <= 2 ^ n := by exact Nat.le_of_lt hk
+            have hl : a (2 ^ (n + 1)) ≤ a (2 ^ n + 1 + k) := by
+              have hy : 2 ^ n + 1 + k ≤ 2 ^ (n + 1) := by
+                refine (Nat.le_sub_iff_add_le' ?h).mp ?_
+                rw [pow_add, pow_one, mul_two]
+                refine Nat.add_le_add_iff_left.mpr ?h.a
+                exact Nat.one_le_two_pow
+                rw [pow_add, pow_one, mul_two, sub_add_eq, add_tsub_cancel_right]
+                exact le_sub_one_of_lt hk
+              exact ha2 hy
+            exact _root_.add_le_add (ik hk') hl
+        have ht' := ht (2 ^ n) (le_refl _)
+        rw [sum_range_succ, succ_eq_add_one]
+        have hk : 2 ^ n + 1 + 2 ^ n = 2 ^ (n + 1) + 1 := by ring
+        rw [Nat.cast_pow, Nat.cast_two, hk] at ht'
+        exact ht'
+    have hq : ∀ n, ∑ i in range (2 ^ n + 1), a i ≤ get_sum conva := fun n => sum_le_get_sum ha1 conva (2 ^ n + 1)
+    have ht : (∑ i in range n, 2 ^ i * a (2 ^ i)) + 2 ^ n * a (2 ^ n) = a 1 + 2 * ∑ i in range n, 2 ^ i * a (2 ^ (i + 1)) := by
+      induction n with
+      | zero =>
+        rw [sum_range_zero, sum_range_zero, mul_zero, add_zero, zero_eq, Nat.pow_zero, _root_.pow_zero 2, one_mul, zero_add]
+      | succ n ih =>
+        rw [sum_range_succ, sum_range_succ, ih, succ_eq_add_one, mul_add, add_assoc]
+        apply Mathlib.Tactic.LinearCombination.c_add_pf
+        apply Mathlib.Tactic.LinearCombination.c_add_pf
+        rw [add_comm, pow_add, pow_one, mul_assoc]
+    have ht' : (∑ i in range n, 2 ^ i * a (2 ^ i)) ≤ a 1 + 2 * ∑ i in range n, 2 ^ i * a (2 ^ (i + 1)) := by
+      rw [← ht]
+      refine (le_add_iff_nonneg_right (∑ i in range n, 2 ^ i * a (2 ^ i))).mpr ?_
+      apply mul_nonneg
+      apply pow_nonneg
+      exact zero_le_two
+      exact ha1 (2 ^ n)
+    calc
+      ∑ i in range n, 2 ^ i * a (2 ^ i) <= a 1 + 2 * ∑ i in range n, 2 ^ i * a (2 ^ (i + 1)) := by
+        exact ht'
+      _ <= a 1 + 2 * ∑ i in range (2 ^ n + 1), a i := by
+        apply add_le_add_left
+        refine (mul_le_mul_iff_of_pos_left ?bc.a0).mpr (hk n)
+        exact two_pos
+      _ <= a 1 + 2 * get_sum conva := by
+        apply add_le_add_left
+        refine (mul_le_mul_iff_of_pos_left ?bc.a0).mpr (hq n)
+  · intro conva
+    apply HasCondSum.of_sum_range_le
+    exact ha1
+    swap
+    exact a 0 + a 1 + get_sum conva
+    have mon : Monotone (fun n => ∑ i in range n, a i) := by
+      apply monotone_nat_of_le_succ
+      intro n
+      rw [← succ_eq_add_one, sum_range_succ, ← add_zero (∑ i in range n, a i), add_assoc, zero_add]
+      apply add_le_add_left
+      exact ha1 n
+    intro n
+    suffices h : ∑ i in range (2 ^ n + 1), a i ≤ a 0 + a 1 + get_sum conva from by
+      have kek : ∀ n, n ≤ 2 ^ n + 1 := by
+        intro n
+        induction n with
+        | zero =>
+          exact Nat.zero_le (2 ^ zero + 1)
+        | succ n ih =>
+          rw [succ_eq_add_one, pow_add, pow_one, mul_two]
+          refine Nat.add_le_add_right ?succ.h 1
+          have kk : 2 ^ n + 1 ≤ 2 ^ n + 2 ^ n := by
+            refine Nat.add_le_add_left ?h (2 ^ n)
+            exact Nat.one_le_two_pow
+          exact Nat.le_trans ih kk
+      exact ge_trans h (mon (kek n))
+    have hk : ∑ i in range (2 ^ n + 1), a i ≤ a 0 + a 1 + ∑ i in range n, 2 ^ i * a (2 ^ i) := by
+      induction n with
+      | zero =>
+        rw [Nat.zero_eq, Nat.pow_zero, ← succ_eq_add_one, sum_range_succ, sum_range_zero, add_zero, sum_range_one]
+      | succ n ih =>
+        rw [succ_eq_add_one, pow_add, sum_range_succ _ n, pow_one, mul_two, add_assoc, add_comm (2 ^n) 1, ← add_assoc]
+        have hg : (k: ℕ) → k ≤ 2 ^n → ∑ i in range (2 ^ n + 1 + k), a i ≤ a 0 + a 1 + ∑ x in range n, 2 ^ x * a (2 ^ x) + k * a (2 ^ n) := by
+          intro k
+          induction k with
+          | zero =>
+            intro _
+            rw [zero_eq, add_zero, Nat.cast_zero, zero_mul, add_zero]
+            exact ih
+          | succ k ih =>
+            intro hk
+            rw [add_succ, sum_range_succ, Nat.cast_succ, add_mul, ← add_assoc, one_mul]
+            have hk' : k ≤ 2 ^ n := by exact Nat.le_of_lt hk
+            have ih := ih hk'
+            have hw : a (2 ^ n + 1 + k) ≤ a (2 ^ n) := by
+              apply ha2
+              rw [add_assoc]
+              exact Nat.le_add_right (2 ^ n) (1 + k)
+            exact _root_.add_le_add ih hw
+        have kek := hg (2 ^ n) (le_refl (2^n))
+        rw [Nat.cast_pow] at kek
+        have kek2 : (@Nat.cast ℝ natCast (2 : ℕ)) = (2 : ℝ) := by
+          exact rfl
+        rw [kek2] at kek
+        rw [← add_assoc]
+        exact kek
+    calc
+      ∑ i in range (2 ^ n + 1), a i ≤ a 0 + a 1 + ∑ i in range n, 2 ^ i * a (2 ^ i) := by
+        assumption
+      _ ≤ a 0 + a 1 + get_sum conva := by
+        apply add_le_add_left
+        have kek : ∀ (n : ℕ), 0 ≤ 2 ^ n * a (2 ^ n) := by
+          intro n
+          apply mul_nonneg
+          refine pow_nonneg ?ha.H n
+          exact ha1 (2 ^ n)
+
+        exact sum_le_get_sum kek conva n
+
+theorem Real.hasCondSum_zeta_iff {k : ℝ} : HasCondSum (fun n => 1 / ((@Nat.cast ℝ natCast n) ^ k)) ↔ (1 < k) := by
+  let g := fun n => if n == 0 then 1 else 1 / (@Nat.cast ℝ natCast n) ^ k
+  have hg : g = fun n => if n == 0 then 1 else 1 / (@Nat.cast ℝ natCast n) ^ k := rfl
+  have hkek : (fun i => 1 / @Nat.cast ℝ natCast (i + 1) ^ k) = (fun i => g (i + 1)) := by
+    apply funext
+    intro n
+    rw [hg]
+    simp
+  have ha : ∀ (n : ℕ), 0 ≤ g n := by
+    intro n
+    rw [hg]
+    simp
+    refine ite_nonneg ?ha ?hb
+    exact instStrictOrderedCommRingReal.proof_3
+    refine inv_nonneg_of_nonneg ?hb.a
+    refine rpow_nonneg ?hb.a.hx k
+    exact cast_nonneg n
+  have hb : 0<k → Antitone g:= by
+    intro hk
+    apply antitone_nat_of_succ_le
+    intro n
+    rw [hg]
+    simp
+    cases (Classical.em (n = 0)) with
+    | inl hn =>
+      rw [if_pos hn, hn, cast_zero, zero_add, Real.one_rpow, inv_one]
+    | inr hn =>
+      rw [if_neg hn]
+      refine inv_le_inv_of_le ?hf.inr.ha ?hf.inr.h
+      refine rpow_pos_of_pos ?hf.inr.ha.hx k
+      refine cast_pos.mpr ?hf.inr.ha.hx.a
+      exact zero_lt_of_ne_zero hn
+      refine (Real.rpow_le_rpow_iff ?hf.inr.h.hx ?hf.inr.h.hy hk).mpr ?hf.inr.h.a
+      exact cast_nonneg n
+      refine Left.add_nonneg ?hf.inr.h.hy.ha ?hf.inr.h.hy.hb
+      exact cast_nonneg n
+      exact instStrictOrderedCommRingReal.proof_3
+      refine le_add_of_le_of_nonneg ?hf.inr.h.a.hbc ?hf.inr.h.a.ha
+      exact instDistribLatticeReal.proof_1 ↑n
+      exact instStrictOrderedCommRingReal.proof_3
+  have hw : (fun n => 2 ^ n * (((2 : ℝ) ^ n) ^ k)⁻¹) = (fun n => (2 ^ (1 - k)) ^ n) := by
+    apply funext
+    intro n
+    rw [← Real.rpow_neg, ← Real.rpow_one (2 ^ n), ← Real.rpow_mul, ← Real.rpow_add,
+        ← Real.rpow_mul_natCast, one_mul, mul_comm, Real.rpow_mul, Real.rpow_nat_cast,
+        Mathlib.Tactic.RingNF.add_neg]
+    repeat {exact zero_le_two}
+    refine pow_pos ?h.hx.H n
+    exact zero_lt_two
+    refine pow_nonneg ?_ n
+    exact zero_le_two
+    refine pow_nonneg ?_ n
+    exact zero_le_two
+  constructor
+  · intro hp
+    cases (Classical.em (k ≤ 0)) with
+    | inl hk =>
+      exfalso
+      have hf := nth_term_test hp
+      have ⟨N, hN⟩ := Metric.tendsto_atTop.1 hf 1 zero_lt_one
+      have hr := hN (N + 1) (Nat.le_add_right N 1)
+      rw [dist_0_eq_abs, abs_eq_self.2] at hr
+      have ht : 0 < @Nat.cast ℝ natCast (N + 1) ^ k := by
+        refine rpow_pos_of_pos ?hx k
+        refine cast_pos.mpr ?hx.a
+        exact zero_lt_succ N
+      have hr2 := (one_div_lt zero_lt_one ht).2 hr
+      rw [div_one] at hr2
+      have ht : ¬(1 < @Nat.cast ℝ natCast (N + 1) ^ k) := by
+        apply not_lt.2
+        refine Real.rpow_le_one_of_one_le_of_nonpos ?hx2 hk
+        refine one_le_cast.mpr ?hx2.a
+        exact Nat.le_add_left 1 N
+      exact ht hr2
+      refine one_div_nonneg.mpr ?mp.inl.a
+      refine rpow_nonneg ?mp.inl.a.hx k
+      exact cast_nonneg (N + 1)
+    | inr hk =>
+      have hk := not_le.1 hk
+      have hp' := (HasCondSum.shift 1).1 hp
+      rw [hkek] at hp'
+      have hp' := (HasCondSum.shift 1).2 hp'
+      have hq := (cauchy_condensation_test ha (hb hk)).1 hp'
+      rw [hg] at hq
+      simp at hq
+      rw [hw] at hq
+      have ha := nth_term_test hq
+      by_contra h
+      rw [not_lt] at h
+      cases (Classical.em (k=1)) with
+      | inl hk =>
+        rw [hk, sub_self, Real.rpow_zero] at ha
+        have hf : (fun n =>  (1 : ℝ) ^ n) = (fun n => 1) := by
+          apply funext
+          intro n
+          exact one_pow n
+        rw [hf] at ha
+        have hg : Tendsto (fun (_ : ℕ) => (1 : ℝ)) atTop (𝓝 1) := tendsto_const_nhds
+        have ht := tendsto_nhds_unique ha hg
+        exact zero_ne_one ht
+      | inr hk =>
+        have h2 : 0 < (((2 : ℝ) ^ (1 - k)))⁻¹ := by
+          apply inv_pos_of_pos
+          apply rpow_pos_of_pos
+          exact zero_lt_two
+        have h3 : ((2 : ℝ) ^ (1 - k))⁻¹ < 1 := by
+          apply inv_lt_one
+          apply Real.one_lt_rpow
+          exact ContDiffBump.instInhabitedContDiffBump.proof_3
+          refine sub_pos.mpr ?_
+          exact lt_of_le_of_ne h hk
+        have h4 := Tendsto.comp (Tendsto.comp  (tendsto_rpow_atBot_of_base_lt_one ((2 : ℝ) ^ (1 - k))⁻¹ h2 h3) Filter.tendsto_neg_atTop_atBot) tendsto_nat_cast_atTop_atTop
+        have h5 : ((Real.rpow (2 ^ (1 - k))⁻¹ ∘ Neg.neg) ∘ Nat.cast) = (fun n => (2 ^ (1 - k)) ^ n) := by
+          apply funext
+          intro n
+          simp
+          rw [← Real.rpow_neg, ← Real.rpow_mul, ← Real.rpow_nat_cast, ← Real.rpow_mul]
+          refine congrArg (HPow.hPow 2) ?_
+          exact neg_mul_neg (1 - k) ↑n
+          exact zero_le_two
+          exact zero_le_two
+          exact zero_le_two
+        rw [h5] at h4
+        exact not_tendsto_atTop_of_tendsto_nhds ha h4
+  · intro hk
+    apply (HasCondSum.shift 1).2
+    rw [hkek]
+    apply (HasCondSum.shift 1).1
+    apply (cauchy_condensation_test ha ?_).2
+    rw [hg]
+    simp
+    rw [hw]
+    apply HasCondSum.of_summable
+    apply NormedRing.summable_geometric_of_norm_lt_one
+    rw [norm_eq_abs, abs_eq_self.2]
+    apply Real.rpow_lt_one_of_one_lt_of_neg
+    exact one_lt_two
+    simp
+    exact hk
+    apply Real.rpow_nonneg
+    exact zero_le_two
+    refine hb ?_
+    refine LT.lt.trans ?_ hk
+    exact Real.zero_lt_one

@@ -28,10 +28,11 @@ theorem lemma2 : Tendsto (fun (x : ℝ) => 1 - 2 / x) atTop (𝓝 1) := by
   intro n
   intro hn
   have hn2 : 2/ε < 4/ε := by
-    refine div_lt_div_of_lt hε ?_
+    refine div_lt_div_of_pos_right ?_ ?_
     refine sub_pos.mp ?_
     ring_nf
     exact two_pos
+    exact hε
   have hn3 : 2/ε < n := by
     exact gt_of_ge_of_gt hn hn2
   have hn4 : 0 < 2/ε := div_pos two_pos hε
@@ -171,13 +172,12 @@ theorem lemma11 : Tendsto (fun (n : ℕ) => (((3 * n ^ 3 - 2) / (3 * n ^ 3 + 4))
         simp
       exact ne_of_gt hc3
     apply (mul_left_inj' hc2).1
-    rw [div_mul_cancel (3 * @Nat.cast ℝ Real.natCast n ^ 3 - 2) hc2, sub_mul 1]
+    rw [div_mul_cancel₀ (3 * @Nat.cast ℝ Real.natCast n ^ 3 - 2) hc2, sub_mul 1]
     have hd : (@Nat.cast ℝ Real.natCast n ^ 3 + 4 / 3) = 1/3 * (3 * (@Nat.cast ℝ Real.natCast n) ^ 3 + 4) := by
       ring
-    rw [hd, div_mul, mul_div_cancel]
+    rw [hd, div_mul, (eq_div_of_mul_eq hc2 rfl).symm]
     simp
     ring
-    exact hc2
   rw [hf]
   exact lemma10
 
@@ -200,7 +200,10 @@ theorem first_wonderful_limit : Tendsto (fun x => (sin x) / x) (𝓝[≠] 0) (�
   have kek : (fun x => sin x / x) = (fun t => t⁻¹ • (sin (0 + t) - sin 0)) := by
     apply funext
     intro x
-    rw [Real.sin_zero, zero_add, sub_zero, @IsROrC.real_smul_eq_coe_mul ℝ, IsROrC.ofReal_real_eq_id, id_eq]
+    rw [Real.sin_zero, zero_add, sub_zero]
+    have kek : x⁻¹ • sin x = x⁻¹ * sin x := by
+      exact rfl
+    rw [kek]
     ring
   rw [kek]
   exact hg
@@ -232,7 +235,7 @@ theorem example2 : ¬ HasCondSum (fun n => sin (1 / n)) := by
     have hd : Tendsto (fun i => 1 / (@Nat.cast ℝ Real.natCast i + 1)) atTop (𝓝[≠] 0) := by
       apply tendsto_nhdsWithin_iff.2
       constructor
-      exact tendsto_one_div_add_atTop_nhds_0_nat
+      exact tendsto_one_div_add_atTop_nhds_zero_nat
       apply Filter.eventually_atTop.2
       constructor
       swap

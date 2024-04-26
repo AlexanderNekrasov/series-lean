@@ -5,14 +5,14 @@ set_option maxHeartbeats 1000000
 
 open Classical BigOperators Topology Filter Nat Finset Metric Real ENNReal NNReal
 
-def CondConvergesTo [AddCommMonoid α] [UniformSpace α] (f : ℕ → α) (a : α) : Prop :=
+def CondConvergesTo [AddCommMonoid α] [TopologicalSpace α] (f : ℕ → α) (a : α) : Prop :=
   Tendsto (fun s => ∑ i in range s, f i) atTop (𝓝 a)
 
-def HasCondSum [AddCommMonoid α] [UniformSpace α] (f : ℕ → α) : Prop :=
+def HasCondSum [AddCommMonoid α] [TopologicalSpace α] (f : ℕ → α) : Prop :=
   ∃ a, CondConvergesTo f a
 
-noncomputable def get_sum [AddCommMonoid α] [UniformSpace α] {f : ℕ → α} (hs : HasCondSum f) : α := Classical.choose hs
-theorem get_sum_spec [AddCommMonoid α] [UniformSpace α] {f : ℕ → α} (hs : HasCondSum f) : CondConvergesTo f (get_sum hs) := Classical.choose_spec hs
+noncomputable def get_sum [AddCommMonoid α] [TopologicalSpace α] {f : ℕ → α} (hs : HasCondSum f) : α := Classical.choose hs
+theorem get_sum_spec [AddCommMonoid α] [TopologicalSpace α] {f : ℕ → α} (hs : HasCondSum f) : CondConvergesTo f (get_sum hs) := Classical.choose_spec hs
 
 theorem sum_of_nonneg_is_nonneg {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : HasCondSum f) : 0 ≤ get_sum hs := by
   lift f to ℕ → ℝ≥0 using fun i => hf i
@@ -33,7 +33,7 @@ theorem sum_of_nonneg_is_nonneg {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : 
 
 def AbsolutelyConverges [Norm β] (f : ℕ → β) : Prop := HasCondSum (fun i => ‖f i‖)
 
-theorem HasCondSum.of_summable [AddCommMonoid α] [UniformSpace α] {f : ℕ → α} (hf : Summable f) : HasCondSum f := by
+theorem HasCondSum.of_summable [AddCommMonoid α] [TopologicalSpace α] {f : ℕ → α} (hf : Summable f) : HasCondSum f := by
   rw [HasCondSum]
   constructor
   rw [CondConvergesTo]
@@ -144,11 +144,6 @@ theorem AbsolutelyConverges.of_nonpos (f : ℕ → ℝ) (hfneg : ∀ n, f n ≤ 
   apply HasCondSum.of_const_mul
   exact hfsum
 
-theorem Summable.of_nonneg {f : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n) (hs : HasCondSum f) : Summable f := by
-  apply Summable.of_abs_conv
-  apply AbsolutelyConverges.of_nonneg
-  exact hf
-  exact hs
 
 theorem cconv_of_nonneg_of_le
     {f : ℕ → ℝ} {g : ℕ → ℝ} (hf : ∀ n, 0 ≤ f n)
@@ -159,7 +154,7 @@ theorem cconv_of_nonneg_of_le
     calc
       0 ≤ f n := hf n
       f n ≤ g n := hfg n
-  have hfs : Summable g := Summable.of_nonneg hg hs
+  have hfs : Summable g := Summable.of_pos_of_conv hg hs
   apply HasCondSum.of_summable
   apply Summable.of_norm_bounded
   exact hfs
@@ -252,7 +247,7 @@ theorem nth_term_test [NormedAddCommGroup α] [CompleteSpace α] {f : ℕ → α
   simp
   exact hN
 
-theorem condconv_unique [AddCommMonoid α] [UniformSpace α] [T2Space α] {f : ℕ → α} (hf : CondConvergesTo f a) (hg : CondConvergesTo f b) : a = b :=
+theorem condconv_unique [AddCommMonoid α] [TopologicalSpace α] [T2Space α] {f : ℕ → α} (hf : CondConvergesTo f a) (hg : CondConvergesTo f b) : a = b :=
   tendsto_nhds_unique hf hg
 
 theorem second_comparison_test {a : ℕ → ℝ} {b : ℕ → ℝ} (ha : ∀ n, 0 < a n) (hb : ∀ n, 0 < b n) (hab : ∃ m, 0 < m ∧ ∃ M, 0 < M ∧ ∀ n, m ≤ a n / b n ∧ a n / b n ≤ M) :
@@ -405,7 +400,7 @@ theorem equally_convergent_of_limit {a : ℕ → ℝ} {b : ℕ → ℝ} {c : ℝ
       have hg : 3 * c / 2 ≤ M := by exact le_max_left (3 * c / 2) M_1
       apply LT.lt.le (LT.lt.trans_le hl hg)
 
-theorem CondConvergesTo.shift [AddCommGroup α] [UniformSpace α] [ContinuousAdd α] {f: ℕ → α} {c: α} (k: ℕ) : CondConvergesTo f c ↔ CondConvergesTo (fun i => f (i + k)) (c - ∑ i in range k, f i) := by
+theorem CondConvergesTo.shift [AddCommGroup α] [TopologicalSpace α] [ContinuousAdd α] {f: ℕ → α} {c: α} (k: ℕ) : CondConvergesTo f c ↔ CondConvergesTo (fun i => f (i + k)) (c - ∑ i in range k, f i) := by
   have kek  : (fun s => (∑ i in range (s + k), f i) + (-∑ i in range k, f i)) = (fun s => ∑ i in range s, f (i + k)) := by
     apply funext
     intro n
@@ -430,7 +425,7 @@ theorem CondConvergesTo.shift [AddCommGroup α] [UniformSpace α] [ContinuousAdd
   simp at hq
   exact (@Filter.tendsto_add_atTop_iff_nat _ (fun s => ∑ i in range s, f i) (𝓝 c) k).1 hq
 
-theorem HasCondSum.shift [AddCommGroup α] [UniformSpace α] [ContinuousAdd α] {f : ℕ → α} (k : ℕ) : HasCondSum f ↔ HasCondSum (fun i => f (i + k)) := by
+theorem HasCondSum.shift [AddCommGroup α] [TopologicalSpace α] [ContinuousAdd α] {f : ℕ → α} (k : ℕ) : HasCondSum f ↔ HasCondSum (fun i => f (i + k)) := by
   rw [HasCondSum, HasCondSum]
   constructor
   intro hf
@@ -515,7 +510,7 @@ theorem sum_le_get_sum {f : ℕ → ℝ} (hf1 : ∀ n, 0 ≤ f n) (hf2 : HasCond
   rw [← tsum_eq_get_sum]
   apply sum_le_tsum
   exact fun i _ => hf1 i
-  exact Summable.of_nonneg hf1 hf2
+  exact Summable.of_pos_of_conv hf1 hf2
   exact AbsolutelyConverges.of_nonneg f hf1 hf2
 
 theorem cauchy_condensation_test {a : ℕ → ℝ} (ha1 : ∀ n, 0 ≤ a n) (ha2 : Antitone a) :
